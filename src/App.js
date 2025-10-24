@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Stars from "./Stars";
+import TypewriterText from "./TypewriterText";
 import "./App.css";
 
 const scenes = {
   start: {
-    text: "You awaken beneath a sky that does not move. The stars hang like cold nails hammered into darkness. Behind you, distant on the horizon, the Tower stands. An impossible spire that cuts the horizon in half. Its surface gleams faintly, as if it remembers you. Ahead, a single lantern flickers at the edge of a dead forest. The ground between you and it is littered with broken stone, like a forgotten road.",
+    text: "You awaken beneath a sky that does not move. The stars hang like cold nails hammered into darkness. Behind you, distant and unwavering, the Tower stands. An impossible spire that divides the world in half. Its surface gleams faintly, as if it remembers you. Ahead, a single lantern flickers at the edge of a dead forest. The ground between you and it is littered with broken stone, like a forgotten road.",
     choices: [
       { text: "Approach the light", next: "forestEdge" },
       { text: "Call out", next: "echoes" },
@@ -104,20 +105,144 @@ const scenes = {
 
 function App() {
   const [current, setCurrent] = useState("start");
+  const [choicesVisible, setChoicesVisible] = useState(false);
+
+  const [starting, setStarting] = useState(false);
+  const [showText, setShowText] = useState(false);
+  const [buttonHidden, setButtonHidden] = useState(false);
+
+  const audioRefs = useRef({});
 
   const scene = scenes[current];
 
+  const loadAudio = (key, src, options = {}) => {
+    if (!audioRefs.current[key]) {
+      const audio = new Audio(src);
+      audio.loop = options.loop || false;
+      audio.volume = options.volume ?? 1;
+      audioRefs.current[key] = audio;
+    }
+    return audioRefs.current[key];
+  };
+
+  // eslint-disable-next-line
+  const playAudio = (key) => {
+    const audio = audioRefs.current[key];
+    if (audio) audio.play().catch(err => console.log(err));
+  };
+
+  const stopAudio = (key) => {
+    const audio = audioRefs.current[key];
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  };
+
+  // Callback when typing finishes
+  const handleTypingComplete = () => {
+    setTimeout(() => {
+      setChoicesVisible(true);
+    }, 2000); // 2-second delay before showing choices
+  };
+
+  // Reset choices visibility whenever scene changes
+  useEffect(() => {
+    setChoicesVisible(false);
+  }, [current]);
+
+  const handleStart = () => {
+    setStarting(true);
+
+    // Fade in text & hide button
+    setTimeout(() => setShowText(true), 1500);
+    setTimeout(() => setButtonHidden(true), 3000);
+
+    // Load and play soundtrack (OST)
+    const soundtrack = loadAudio("music", "/lanternproject1.mp4", {
+      loop: true,
+      volume: 0.1
+    });
+    soundtrack.play().catch(err => console.log("Autoplay blocked:", err));
+
+    // Optional: load and play narration (starts with music)
+    const startVoice = loadAudio("startVoice", "/start.mp3", {
+      loop: false,
+      volume: 0.6
+    });
+    setTimeout(() => {
+      startVoice.play().catch(err => console.log("Autoplay blocked:", err));
+    }, 2000)
+  };
+
+  const handleReset = () => {
+    setStarting(false);
+    setShowText(false);
+    setButtonHidden(false);
+    setChoicesVisible(false);
+    setCurrent("start");
+
+    stopAudio("music");
+    stopAudio("startVoice");
+  };
+
   return (
-    <div className="game-container">
+    <div className={`game-container ${starting ? "starting" : ""}`}>
       <Stars count={150} />
-      <h1>The Lantern at the End of the World</h1>
-      <p className="scene-text">{scene.text}</p>
-      <div className="choices">
-        {scene.choices.map((choice, index) => (
-          <button key={index} onClick={() => setCurrent(choice.next)}>
-            {choice.text}
-          </button>
-        ))}
+      <h1 className="reset-title" onClick={handleReset}>
+        The Lantern at the End of the World
+      </h1>
+
+      <button
+        className={`start-button button ${starting ? "fade-out" : ""} ${buttonHidden ? "hidden" : ""}`}
+        onClick={handleStart}
+        aria-hidden={starting}
+      >
+        Wander
+      </button>
+
+      {showText && (
+        <div className="scene-text-container fade-in">
+          <TypewriterText
+            text={scene.text}
+            speed={35}
+            onComplete={handleTypingComplete}
+          />
+        </div>
+      )}
+
+      {choicesVisible && (
+        <div className="choices fade-in">
+          {scene.choices.map((choice, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                setCurrent(choice.next);
+                setShowText(false);
+                setTimeout(() => setShowText(true), 50);
+              }}
+            >
+              {choice.text}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="social-icons">
+        <a
+          href="https://discord.gg/CmNqX7Mrtp"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <i className="fa-brands fa-discord"></i>
+        </a>
+        <a
+          href="https://www.patreon.com/c/TheMortalTrials"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <i className="fa-brands fa-patreon"></i>
+        </a>
       </div>
     </div>
   );
