@@ -83,6 +83,24 @@ body {
   transition: opacity 3s ease, transform 0.6s ease;
 }
 
+.narration-toggle {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  font-size: 2rem;
+  background: rgba(26, 26, 26, 0.9);
+  color: #ffd36b;
+  border: 2px solid #ffd36b;
+  border-radius: 50%;
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  z-index: 100;
+}
+
+.narration-toggle:hover {
+  transform: scale(1.1);
+}
+
 .game-container {
   display: flex;
   flex-direction: column;
