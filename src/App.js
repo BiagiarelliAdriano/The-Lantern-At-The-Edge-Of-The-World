@@ -101,6 +101,7 @@ const scenes = {
     text: "You reach out and touch the lantern. Warmth rushes up your arm and into your chest. The flame blossoms outward, swirling until it forms a small figure, no taller than your knee, made of golden mist and wearing an ancient bronze mask. 'You found the true path', it says, voice like wind through hollow metal. 'Most only circle forever.' It holds out a fragment of the flame. 'Carry this. If you share its light, another road will open.' As you take it, dawn breaks across the world. The forest melts into sunlight, and the Tower shines like glass behind you. Ending 1/3 - 'The Keeper's Blessing'",
     choices: [{ text: "Play Again", next: "start" }],
     narration: "narrationKeeperRevealed.mp3",
+    music: "/lightfromhome.mp3",
   },
   voiceFlame: {
     text: "You whisper to the light. It flickers, then whispers back, your own voice, older, gentler. 'Thank you,' it says. 'I almost forgot how to listen.' You watch the flame brighten until it blinds you, and when the light fades, you see yourself walking away from the shrine from another direction, holding a lantern of your own. Ending 2/3 - 'The Remembered Self'",
@@ -112,6 +113,7 @@ const scenes = {
     text: "You blow out the lantern. Darkness swallows the shrine. Then, a metallic crash echoes behind you. A gruff voice shouts: 'Oi! That took me three hours to light!' An old man stumbles from behind the shrine, wearing a soot-stained apron and carrying an oil can. His beard is singed, and his expression is pure exasperation. 'Do you people think this forest maintains itself? Every century someone comes in, touches things, and suddenly I'm out here relighting the bloody lantern again!' He grumbles, relights it with a spark, and hands you a smaller one. 'Here. If you're going to wander my woods, make yourself useful.' He pats your arm, mutters something about 'tourists', and shuffles back into the trees. Ending 3/3 - 'The Caretaker's Complaint'",
     choices: [{ text: "Play Again", next: "start" }],
     narration: "narrationHiddenEnding.mp3",
+    music: "/rantinlantern.mp3",
   },
   lost: {
     text: "The forest folds in around you. The air becomes thick and heavy. Your steps echo without end. The lantern flickers once more. Then becomes a star, then ash, then nothing. When silence finally returns, you can't tell whether you're still walking or only remembering it. Bad Ending.",
@@ -128,13 +130,17 @@ function App() {
   const [buttonHidden, setButtonHidden] = useState(false);
   const [currentNarrationKey, setCurrentNarrationKey] = useState(null);
   const [narrationMuted, setNarrationMuted] = useState(false);
-  const [currentMusicKey, setCurrentMusicKey] = useState("music");
+  const [currentMusicKey, setCurrentMusicKey] = useState(null);
 
   const audioRefs = useRef({});
-  const narrationTimeout = useRef(null);
+  const narrationTimeouts = useRef([]);
+  const musicTimeouts = useRef([]);
+
+  const handleStarsReset = useRef(null);
 
   const scene = scenes[current];
 
+  // Load or return existing audio
   const loadAudio = (key, src, options = {}) => {
     if (!audioRefs.current[key]) {
       const audio = new Audio(src);
@@ -153,6 +159,14 @@ function App() {
     }
   };
 
+  const clearAllTimeouts = () => {
+    narrationTimeouts.current.forEach((id) => clearTimeout(id));
+    narrationTimeouts.current = [];
+    musicTimeouts.current.forEach((id) => clearTimeout(id));
+    musicTimeouts.current = [];
+  };
+
+  // Delayed narration
   const playAudioDelayed = (key, src, options = {}) => {
     const { loop = false, volume = 1, delay = 0 } = options;
 
@@ -162,18 +176,47 @@ function App() {
 
     const audio = loadAudio(key, src, { loop, volume });
 
-    if (narrationTimeout.current) clearTimeout(narrationTimeout.current);
-
-    narrationTimeout.current = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       audio.currentTime = 0;
       audio.volume = volume;
-      audio.play().catch(err => console.log("Audio play failed:", err));
+      audio.play().catch((err) => console.log("Audio play failed:", err));
 
       if (key.startsWith("narration")) {
         setCurrentNarrationKey(key);
         setNarrationMuted(false);
       }
     }, delay);
+
+    narrationTimeouts.current.push(timeoutId);
+  };
+
+  // Delayed music
+  const playMusicDelayed = (key, src, options = {}) => {
+    const { loop = true, volume = 0.1, delay = 0 } = options;
+
+    // Stop previous music immediately
+    if (currentMusicKey && currentMusicKey !== key) {
+      stopAudio(currentMusicKey);
+    }
+
+    // Clear any scheduled music
+    musicTimeouts.current.forEach((id) => clearTimeout(id));
+    musicTimeouts.current = [];
+
+    const timeoutId = setTimeout(() => {
+      const audio = loadAudio(key, src, { loop, volume });
+      audio.currentTime = 0;
+      audio.play().catch((err) => console.log("Music play failed:", err));
+      setCurrentMusicKey(key);
+    }, delay);
+
+    musicTimeouts.current.push(timeoutId);
+  };
+
+  const stopAllMusic = () => {
+    if (currentMusicKey) stopAudio(currentMusicKey);
+    musicTimeouts.current.forEach((id) => clearTimeout(id));
+    musicTimeouts.current = [];
   };
 
   const toggleNarration = () => {
@@ -186,15 +229,13 @@ function App() {
       setNarrationMuted(true);
     } else {
       audio.currentTime = 0;
-      audio.play().catch(err => console.log(err));
+      audio.play().catch((err) => console.log(err));
       setNarrationMuted(false);
     }
   };
 
   const handleTypingComplete = () => {
-    setTimeout(() => {
-      setChoicesVisible(true);
-    }, 2000);
+    setTimeout(() => setChoicesVisible(true), 2000);
   };
 
   const handleStart = () => {
@@ -204,11 +245,11 @@ function App() {
 
     // Start main background music
     const musicAudio = loadAudio("music", "/lanternproject1.mp4", { loop: true, volume: 0.1 });
-    musicAudio.play().catch(err => console.log("Autoplay blocked:", err));
+    musicAudio.play().catch((err) => console.log("Autoplay blocked:", err));
     setCurrentMusicKey("music");
 
     // Start narration after delay
-    playAudioDelayed("narrationStart", "/start.mp3", { loop: false, volume: 0.4, delay: 2000 });
+    playAudioDelayed("narrationStart", "/start.mp3", { loop: false, volume: 0.6, delay: 2000 });
   };
 
   const handleReset = () => {
@@ -218,14 +259,14 @@ function App() {
     setChoicesVisible(false);
     setCurrent("start");
 
-    Object.keys(audioRefs.current).forEach(key => stopAudio(key));
+    // Stop all audio
+    Object.keys(audioRefs.current).forEach((key) => stopAudio(key));
     setCurrentNarrationKey(null);
     setNarrationMuted(false);
 
-    if (narrationTimeout.current) {
-      clearTimeout(narrationTimeout.current);
-      narrationTimeout.current = null;
-    }
+    // Clear all pending timeouts
+    clearAllTimeouts();
+    setCurrentMusicKey(null);
   };
 
   const handleChoiceClick = (choice) => {
@@ -236,67 +277,63 @@ function App() {
       setNarrationMuted(false);
     }
 
+    // Clear all pending timeouts for narration
+    clearAllTimeouts();
+
     const nextScene = choice.next;
     const nextSceneData = scenes[nextScene];
 
-    // Handle music switching if the new scene has a music field
-    if (nextSceneData?.music) {
-      const newMusicKey = `music_${nextScene}`;
+    // Special case for hiddenEnding delayed sounds
+    if (nextScene === "hiddenEnding") {
+      // Stop any current music, schedule hiddenEnding tracks
+      stopAllMusic();
 
-      if (currentMusicKey !== newMusicKey) {
-        if (currentMusicKey && audioRefs.current[currentMusicKey]) {
-          stopAudio(currentMusicKey);
-        }
+      // Play metal pipe sound at 6s
+      playAudioDelayed("metalPipe", "/metalpipefallingsoundeffect.mp3", { loop: false, volume: 1, delay: 6000 });
 
-        // Delay new music slightly before starting
-        setTimeout(() => {
-          playAudioDelayed(newMusicKey, nextSceneData.music, { loop: true, volume: 0.1, delay: 0 });
-          setCurrentMusicKey(newMusicKey);
+      // Play hiddenEnding music at 15s
+      playMusicDelayed("hiddenEndingMusic", "/rantinlantern.mp3", { loop: true, volume: 0.1, delay: 15000 });
 
-          // Once music starts, handle narration too (after its own delay)
-          if (nextSceneData.narration) {
-            setTimeout(() => {
-              playAudioDelayed(`narration-${nextScene}`, `/${nextSceneData.narration}`, {
-                loop: false,
-                volume: 0.4,
-                delay: 0,
-              });
-            }, 1000);
-          }
-        }, 300);
-      } else {
-        // If same music continues, just play narration normally
-        if (nextSceneData.narration) {
-          playAudioDelayed(`narration-${nextScene}`, `/${nextSceneData.narration}`, {
-            loop: false,
-            volume: 0.4,
-            delay: 1000,
-          });
-        }
+      // Play narration immediately
+      if (nextSceneData.narration) {
+        playAudioDelayed(`narration-${nextScene}`, `/${nextSceneData.narration}`, { loop: false, volume: 0.6, delay: 0 });
       }
     } else {
-      // If scene has no special music, play narration normally
-      if (nextSceneData && nextSceneData.narration) {
-        playAudioDelayed(`narration-${nextScene}`, `/${nextSceneData.narration}`, {
-          loop: false,
-          volume: 0.4,
-          delay: 1000,
-        });
+      // For normal scenes: only start new music if it's different from current
+      if (nextSceneData?.music && nextSceneData.music !== audioRefs.current[currentMusicKey]?.src) {
+        stopAllMusic();
+        playMusicDelayed(`music_${nextScene}`, nextSceneData.music, { loop: true, volume: 0.1, delay: 0 });
+      }
+
+      // Play narration normally
+      if (nextSceneData?.narration) {
+        playAudioDelayed(`narration-${nextScene}`, `/${nextSceneData.narration}`, { loop: false, volume: 0.6, delay: 1000 });
       }
     }
 
     // Move to next scene visually
     setCurrent(nextScene);
+    // If the player clicks "Play Again" from an ending, reset stars
+    if (["keeperRevealed", "voiceFlame", "hiddenEnding"].includes(current)) {
+      if (handleStarsReset.current) handleStarsReset.current();
+    }
     setShowText(false);
     setTimeout(() => setShowText(true), 50);
   };
 
   return (
     <div className={`game-container ${starting ? "starting" : ""}`}>
-      <Stars count={150} />
+      <Stars
+        count={150}
+        triggerAnimation={["keeperRevealed", "voiceFlame", "hiddenEnding"].includes(current)}
+        onReset={(resetFn) => {
+          // Store reset function to call when "Play Again" is clicked
+          handleStarsReset.current = resetFn;
+        }}
+      />
 
       <h1 className="reset-title" onClick={handleReset}>
-        The Lantern at the End of the World
+        The Lantern at the Edge of the World
       </h1>
 
       <button
@@ -309,11 +346,7 @@ function App() {
 
       {showText && (
         <div className="scene-text-container fade-in">
-          <TypewriterText
-            text={scene.text}
-            speed={80}
-            onComplete={handleTypingComplete}
-          />
+          <TypewriterText text={scene.text} speed={80} onComplete={handleTypingComplete} />
         </div>
       )}
 
@@ -346,6 +379,5 @@ function App() {
     </div>
   );
 }
-
 
 export default App;
